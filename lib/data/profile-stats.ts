@@ -19,20 +19,24 @@ export interface MasteryStats {
 }
 
 /**
- * Mastery per mode (spec §12). A country is "mastered" once the player's success
- * rate on it exceeds 80% across all their attempts; the bar fills against the
- * whole catalogue (every country that has a flag / a capital).
+ * Mastery per mode (spec §12). A core country is "mastered" once the player has
+ * answered it at least 3 times with a success rate above 80%. The bar fills
+ * against the core catalogue (difficulty 1 — the set reachable in default play).
  */
 export async function getMasteryStats(): Promise<MasteryStats> {
   const supabase = await createClient();
 
   const [flagsTotalRes, capitalsTotalRes, summaryRes] = await Promise.all([
-    // All countries have a flag.
-    supabase.from("countries").select("id", { count: "exact", head: true }),
-    // Capitals mode only covers countries that have a capital.
+    // Core countries (difficulty 1) — the set reachable in default play.
     supabase
       .from("countries")
       .select("id", { count: "exact", head: true })
+      .eq("difficulty", 1),
+    // Capitals mode only covers core countries that have a capital.
+    supabase
+      .from("countries")
+      .select("id", { count: "exact", head: true })
+      .eq("difficulty", 1)
       .eq("has_capital", true),
     supabase.rpc("mastery_summary"),
   ]);
