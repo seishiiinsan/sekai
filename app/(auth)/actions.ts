@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyTurnstile } from "@/lib/auth/turnstile";
+import { isPasswordPwned } from "@/lib/auth/pwned";
 import {
   signUpSchema,
   signInSchema,
@@ -57,6 +58,14 @@ export async function signUpAction(
   );
   if (!human) {
     return { error: "Vérification anti-robot échouée. Recharge la page et réessaie." };
+  }
+
+  if (await isPasswordPwned(password)) {
+    return {
+      fieldErrors: {
+        password: "Ce mot de passe figure dans une fuite de données connue. Choisis-en un autre.",
+      },
+    };
   }
 
   const admin = createAdminClient();
@@ -158,6 +167,14 @@ export async function resetPasswordAction(
   });
   if (!parsed.success) {
     return { fieldErrors: flattenZodErrors(parsed.error) };
+  }
+
+  if (await isPasswordPwned(parsed.data.password)) {
+    return {
+      fieldErrors: {
+        password: "Ce mot de passe figure dans une fuite de données connue. Choisis-en un autre.",
+      },
+    };
   }
 
   const supabase = await createClient();
