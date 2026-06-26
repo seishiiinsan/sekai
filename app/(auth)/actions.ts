@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { verifyTurnstile } from "@/lib/auth/turnstile";
 import {
   signUpSchema,
   signInSchema,
@@ -47,6 +48,16 @@ export async function signUpAction(
     return { fieldErrors: flattenZodErrors(parsed.error) };
   }
   const { email, password, username, avatar } = parsed.data;
+
+  // Bot/abuse protection (spec §5). No-op until Turnstile keys are configured.
+  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim();
+  const human = await verifyTurnstile(
+    formData.get("cf-turnstile-response") as string | null,
+    ip,
+  );
+  if (!human) {
+    return { error: "Vérification anti-robot échouée. Recharge la page et réessaie." };
+  }
 
   const admin = createAdminClient();
 
