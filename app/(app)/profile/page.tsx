@@ -18,7 +18,7 @@ export default async function ProfilePage() {
   if (!profile) redirect("/login");
 
   const [mastery, dashboard] = await Promise.all([
-    getMasteryStats(profile.id),
+    getMasteryStats(),
     getDashboardData(profile.id),
   ]);
 
@@ -47,6 +47,7 @@ export default async function ProfilePage() {
         level={profile.level}
         currentStreak={profile.current_streak}
         longestStreak={profile.longest_streak}
+        studied={mastery.totalItems}
         mastered={mastery.totalMastered}
       />
 

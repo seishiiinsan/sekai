@@ -1,59 +1,60 @@
 import { createClient } from "@/lib/supabase/server";
-import { masteryTier, isMastered, type MasteryTier } from "@/lib/game/srs";
 import { GAME_MODES, type GameMode } from "@/lib/game/types";
 
 export interface ModeMastery {
   mode: GameMode;
+  /** Total countries that exist for this mode (the whole catalogue). */
   total: number;
+  /** Distinct countries the player has encountered at least once. */
+  seen: number;
+  /** Items whose success rate across all attempts exceeds 80%. */
   mastered: number;
-  tiers: Record<MasteryTier, number>;
 }
 
 export interface MasteryStats {
   byMode: ModeMastery[];
+  /** Distinct (country × mode) items the player has attempted. */
   totalItems: number;
   totalMastered: number;
 }
 
-const emptyTiers = (): Record<MasteryTier, number> => ({
-  new: 0,
-  learning: 0,
-  familiar: 0,
-  strong: 0,
-  mastered: 0,
-});
-
-/** Aggregate SRS mastery per mode for the profile visualisations (spec §12). */
-export async function getMasteryStats(userId: string): Promise<MasteryStats> {
+/**
+ * Mastery per mode (spec §12). A country is "mastered" once the player's success
+ * rate on it exceeds 80% across all their attempts; the bar fills against the
+ * whole catalogue (every country that has a flag / a capital).
+ */
+export async function getMasteryStats(): Promise<MasteryStats> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("mastery_items")
-    .select("mode, srs_level")
-    .eq("user_id", userId);
 
-  const byMode: Record<GameMode, ModeMastery> = {
-    flags: { mode: "flags", total: 0, mastered: 0, tiers: emptyTiers() },
-    capitals: { mode: "capitals", total: 0, mastered: 0, tiers: emptyTiers() },
+  const [flagsTotalRes, capitalsTotalRes, summaryRes] = await Promise.all([
+    // All countries have a flag.
+    supabase.from("countries").select("id", { count: "exact", head: true }),
+    // Capitals mode only covers countries that have a capital.
+    supabase
+      .from("countries")
+      .select("id", { count: "exact", head: true })
+      .eq("has_capital", true),
+    supabase.rpc("mastery_summary"),
+  ]);
+
+  const totalByMode: Record<GameMode, number> = {
+    flags: flagsTotalRes.count ?? 0,
+    capitals: capitalsTotalRes.count ?? 0,
   };
 
-  let totalItems = 0;
-  let totalMastered = 0;
+  const summary = summaryRes.data ?? [];
+  const byMode: ModeMastery[] = GAME_MODES.map((mode) => {
+    const row = summary.find((r) => r.mode === mode);
+    return {
+      mode,
+      total: totalByMode[mode],
+      seen: row?.attempted ?? 0,
+      mastered: row?.mastered ?? 0,
+    };
+  });
 
-  for (const row of data ?? []) {
-    const m = byMode[row.mode as GameMode];
-    if (!m) continue;
-    m.total++;
-    totalItems++;
-    m.tiers[masteryTier(row.srs_level)]++;
-    if (isMastered(row.srs_level)) {
-      m.mastered++;
-      totalMastered++;
-    }
-  }
+  const totalItems = summary.reduce((sum, r) => sum + r.attempted, 0);
+  const totalMastered = summary.reduce((sum, r) => sum + r.mastered, 0);
 
-  return {
-    byMode: GAME_MODES.map((mode) => byMode[mode]),
-    totalItems,
-    totalMastered,
-  };
+  return { byMode, totalItems, totalMastered };
 }

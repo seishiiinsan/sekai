@@ -311,6 +311,14 @@ export type Database = {
         }
       }
       level_for_xp: { Args: { p_xp: number }; Returns: number }
+      mastery_summary: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          mode: Database["public"]["Enums"]["game_mode"]
+          attempted: number
+          mastered: number
+        }[]
+      }
     }
     Enums: {
       direction: "direct" | "inverse"

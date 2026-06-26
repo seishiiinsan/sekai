@@ -77,9 +77,11 @@ export function reviewItem(
     };
   }
 
-  // Miss: back to the first box, relearn shortly, ease penalised.
+  // Miss: back to relearning (box 0), due shortly, ease penalised. Box 0 keeps a
+  // lapsed item visually distinct from one answered correctly at least once
+  // (box 1+), so the mastery bar reflects performance.
   return {
-    srsLevel: 1,
+    srsLevel: 0,
     ease: clamp(prev.ease - 0.2, MIN_EASE, MAX_EASE),
     intervalDays: 0,
     reps: prev.reps,
