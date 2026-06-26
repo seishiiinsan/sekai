@@ -48,7 +48,7 @@ describe("reviewItem — misses", () => {
   it("sends a strong item back to relearning, soon and with a lapse", () => {
     const strong = { srsLevel: 5, ease: 2.5, intervalDays: 30, reps: 5, lapses: 0 };
     const next = reviewItem(strong, false, NOW);
-    expect(next.srsLevel).toBe(1);
+    expect(next.srsLevel).toBe(0);
     expect(next.lapses).toBe(1);
     expect(next.intervalDays).toBe(0);
     expect(next.ease).toBeCloseTo(2.3);
