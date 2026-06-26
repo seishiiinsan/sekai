@@ -1,4 +1,4 @@
-import { Zap, TrendingUp, Flame, Award, Globe2 } from "lucide-react";
+import { Zap, TrendingUp, Flame, Award, Globe2, BookOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 function StatCard({
@@ -30,20 +30,23 @@ export function StatGrid({
   level,
   currentStreak,
   longestStreak,
+  studied,
   mastered,
 }: {
   totalXp: number;
   level: number;
   currentStreak: number;
   longestStreak: number;
+  studied: number;
   mastered: number;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       <StatCard icon={Zap} label="XP total" value={totalXp.toLocaleString("fr-FR")} />
       <StatCard icon={TrendingUp} label="Niveau" value={String(level)} />
       <StatCard icon={Flame} label="Série actuelle" value={`${currentStreak} j`} />
       <StatCard icon={Award} label="Record de série" value={`${longestStreak} j`} />
+      <StatCard icon={BookOpen} label="Notions étudiées" value={String(studied)} />
       <StatCard icon={Globe2} label="Notions maîtrisées" value={String(mastered)} />
     </div>
   );

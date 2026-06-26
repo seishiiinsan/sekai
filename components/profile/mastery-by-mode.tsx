@@ -1,52 +1,49 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MODE_LABELS } from "@/lib/game/types";
-import type { MasteryTier } from "@/lib/game/srs";
 import type { ModeMastery } from "@/lib/data/profile-stats";
 
-const TIER_ORDER: MasteryTier[] = ["new", "learning", "familiar", "strong", "mastered"];
-const TIER_LABEL: Record<MasteryTier, string> = {
-  new: "Découverte",
-  learning: "En cours",
-  familiar: "Familier",
-  strong: "Solide",
-  mastered: "Maîtrisé",
-};
-const TIER_COLOR: Record<MasteryTier, string> = {
-  new: "var(--muted)",
-  learning: "var(--heat-2)",
-  familiar: "var(--heat-3)",
-  strong: "var(--chart-2)",
-  mastered: "var(--primary)",
-};
+// Intermediate "discovered but not mastered" colour: a lighter indigo than the
+// solid "mastered" primary, while the muted track shows "still to discover".
+const SEEN_COLOR = "var(--chart-3)";
 
 function ModeRow({ data }: { data: ModeMastery }) {
-  const { total } = data;
+  const total = data.total || 1;
+  const masteredPct = (data.mastered / total) * 100;
+  const inProgress = Math.max(0, data.seen - data.mastered);
+  const inProgressPct = (inProgress / total) * 100;
+
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
         <span className="text-sm font-medium">{MODE_LABELS[data.mode]}</span>
-        <span className="text-xs text-muted-foreground">
-          {total === 0 ? "Pas encore joué" : `${data.mastered}/${total} maîtrisés`}
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {data.mastered} / {data.total} maîtrisées
         </span>
       </div>
-      <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
-        {total > 0 &&
-          TIER_ORDER.map((tier) => {
-            const count = data.tiers[tier];
-            if (count === 0) return null;
-            return (
-              <span
-                key={tier}
-                title={`${TIER_LABEL[tier]} : ${count}`}
-                style={{
-                  width: `${(count / total) * 100}%`,
-                  backgroundColor: TIER_COLOR[tier],
-                }}
-              />
-            );
-          })}
+      <div
+        className="flex h-2.5 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={data.total}
+        aria-valuenow={data.mastered}
+        aria-label={`${MODE_LABELS[data.mode]} : ${data.mastered} maîtrisées, ${data.seen} découvertes sur ${data.total}`}
+      >
+        <span className="h-full bg-primary transition-all" style={{ width: `${masteredPct}%` }} />
+        <span
+          className="h-full transition-all"
+          style={{ width: `${inProgressPct}%`, backgroundColor: SEEN_COLOR }}
+        />
       </div>
     </div>
+  );
+}
+
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="size-2.5 rounded-[3px]" style={{ backgroundColor: color }} />
+      {label}
+    </span>
   );
 }
 
@@ -61,15 +58,9 @@ export function MasteryByMode({ byMode }: { byMode: ModeMastery[] }) {
           <ModeRow key={m.mode} data={m} />
         ))}
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1">
-          {TIER_ORDER.map((tier) => (
-            <span key={tier} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span
-                className="size-2.5 rounded-[3px]"
-                style={{ backgroundColor: TIER_COLOR[tier] }}
-              />
-              {TIER_LABEL[tier]}
-            </span>
-          ))}
+          <LegendItem color="var(--primary)" label="Maîtrisées (réussite > 80%)" />
+          <LegendItem color={SEEN_COLOR} label="Découvertes" />
+          <LegendItem color="var(--muted)" label="À découvrir" />
         </div>
       </CardContent>
     </Card>
