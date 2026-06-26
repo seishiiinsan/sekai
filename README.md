@@ -60,14 +60,20 @@ La validation des réponses et toute attribution d'XP/streak/maîtrise se font
   la fonction `SECURITY DEFINER` `apply_series_result`, réservée à `service_role`.
 - `attempts`, `mastery_items`, `daily_activity` : lecture limitée au propriétaire
   (RLS), écriture serveur uniquement.
+- **Drapeaux** servis via `/api/flag/<token>` : le token est un chiffré AES-256-GCM
+  opaque, infalsifiable et lié à la session de `(sessionId, countryId)`. L'URL
+  n'expose donc plus le code ISO, et l'id du pays-réponse n'est jamais envoyé au
+  client (sinon comparable aux ids des options QCM).
 
 Moteur de jeu pur et testé : `lib/game/{xp,srs,validation,questions}.ts`.
 Données géographiques ingérées une fois en base (CDC §4), rafraîchissables via
 `npm run seed`.
 
-### Durcissements recommandés (non bloquants)
+### Durcissements
 
-- Activer « Leaked password protection » dans Supabase Auth.
-- Proxy/obfuscation des URLs de drapeaux (flagcdn expose le code ISO) pour un
-  anti-triche solo plus strict.
-- Captcha léger / rate-limit renforcé à l'inscription (CDC §5).
+- ✅ Proxy/obfuscation des URLs de drapeaux (voir ci-dessus).
+- ✅ Captcha à l'inscription : **Cloudflare Turnstile** (CDC §5), désactivé tant que
+  `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` ne sont pas renseignés.
+- ⬜ **« Leaked password protection »** : à activer manuellement dans le dashboard
+  Supabase → Authentication → Policies (pas d'API/MCP pour ce réglage). Vérifie
+  les mots de passe contre HaveIBeenPwned.

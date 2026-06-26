@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { SubmitButton } from "./submit-button";
 import { FieldError, FormError } from "./field-error";
+import { TurnstileWidget } from "./turnstile-widget";
 
 export function SignupForm() {
   const [state, action] = useActionState<AuthFormState, FormData>(signUpAction, {});
@@ -80,6 +81,8 @@ export function SignupForm() {
             />
             <FieldError message={state.fieldErrors?.password} />
           </div>
+
+          <TurnstileWidget />
 
           <SubmitButton className="w-full">Créer mon compte</SubmitButton>
         </form>
