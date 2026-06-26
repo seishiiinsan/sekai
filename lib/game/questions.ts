@@ -87,9 +87,11 @@ function buildOptions(
   const others = pool.filter((c) => c.id !== answer.id);
 
   const asOption = (c: PoolCountry): QuestionOption => {
-    // Inverse flags: the option IS a flag to pick.
+    // Inverse flags: the option IS a flag to pick. The label is intentionally
+    // empty — sending the country name would announce the answer (spec §11), and
+    // the flag option renders no text anyway.
     if (mode === "flags" && direction === "inverse") {
-      return { countryId: c.id, label: c.name_fr, flagUrl: c.flag_svg_url ?? undefined };
+      return { countryId: c.id, label: "", flagUrl: c.flag_svg_url ?? undefined };
     }
     // Capitals direct: the option is a capital.
     if (mode === "capitals" && direction === "direct") {
@@ -116,7 +118,6 @@ function toClientQuestion(
     id: String(qid),
     mode,
     direction,
-    countryId: answer.id,
     allowsFreeInput: !(mode === "flags" && direction === "inverse"),
   };
 

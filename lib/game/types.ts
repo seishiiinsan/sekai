@@ -65,8 +65,9 @@ export interface ClientQuestion {
   id: string;
   mode: GameMode;
   direction: Direction;
-  /** The country the question is about (the answer key, server-side). */
-  countryId: number;
+  // NB: the answer's country id is deliberately NOT sent to the client — it lives
+  // only in the server-side answer key (spec §11). Exposing it here would let a
+  // player match it against the QCM options' country ids and read the answer.
   /** Prompt text (e.g. a country name or a capital), when applicable. */
   prompt?: string;
   /** Flag URL shown as the prompt (direct flags mode). */
