@@ -20,20 +20,25 @@ function iso(d: Date): string {
 export function StreakHeatmap({ activity }: { activity: DayActivity[] }) {
   const xpByDate = new Map(activity.map((a) => [a.date, a.xp]));
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayRow = (today.getDay() + 6) % 7; // Monday = 0
+  // Work entirely in UTC so cell date strings match the UTC dates stored in
+  // daily_activity (mixing local setHours with UTC toISOString shifts the grid
+  // by the timezone offset and hides today's activity behind a "future" cell).
+  const now = new Date();
+  const today = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  const todayRow = (today.getUTCDay() + 6) % 7; // Monday = 0
   const todayIso = iso(today);
 
   const first = new Date(today);
-  first.setDate(today.getDate() - ((WEEKS - 1) * 7 + todayRow));
+  first.setUTCDate(today.getUTCDate() - ((WEEKS - 1) * 7 + todayRow));
 
   const columns: { date: string; xp: number; future: boolean }[][] = [];
   for (let col = 0; col < WEEKS; col++) {
     const week: { date: string; xp: number; future: boolean }[] = [];
     for (let row = 0; row < 7; row++) {
       const d = new Date(first);
-      d.setDate(first.getDate() + col * 7 + row);
+      d.setUTCDate(first.getUTCDate() + col * 7 + row);
       const key = iso(d);
       week.push({ date: key, xp: xpByDate.get(key) ?? 0, future: key > todayIso });
     }
