@@ -29,7 +29,7 @@ export function ChoiceGrid({
       role="group"
       aria-label="Réponses possibles"
     >
-      {question.options?.map((opt) => {
+      {question.options?.map((opt, i) => {
         const isCorrect = correctId === opt.countryId;
         const isChosen = selectedId === opt.countryId;
         const showCorrect = disabled && isCorrect;
@@ -41,7 +41,9 @@ export function ChoiceGrid({
             type="button"
             disabled={disabled}
             onClick={() => onSelect(opt.countryId)}
-            aria-label={isFlagChoice ? opt.label : undefined}
+            // Anti-cheat: never label a flag option with its country name — that
+            // would announce the answer (spec §11). Use a neutral position label.
+            aria-label={isFlagChoice ? `Drapeau ${i + 1}` : undefined}
             className={cn(
               "relative flex items-center gap-3 rounded-xl border bg-card p-3 text-left text-sm font-medium transition-all",
               "enabled:hover:border-primary/40 enabled:hover:bg-accent",

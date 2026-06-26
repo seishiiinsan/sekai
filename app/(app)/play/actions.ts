@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateSeries, type AnswerKeyEntry } from "@/lib/game/questions";
+import { signFlagToken } from "@/lib/game/flag-token";
 import { reviewItem, NEW_SRS_STATE, type SrsState } from "@/lib/game/srs";
 import { xpForAnswer, levelForXp } from "@/lib/game/xp";
 import { validateChoice, validateFreeInput } from "@/lib/game/validation";
@@ -59,7 +60,23 @@ export async function startSeries(raw: unknown): Promise<StartedSeries> {
     throw new Error("Impossible de démarrer la série.");
   }
 
-  return { sessionId: data.id, questions, settings };
+  // Rewrite flag URLs to opaque, session-scoped proxy tokens so the ISO code
+  // (and thus the answer) never reaches the client (spec §11). The prompt flag
+  // belongs to the question's answer; option flags belong to each option.
+  const sessionId = data.id;
+  const answerByQid = new Map(answerKey.map((e) => [String(e.qid), e.countryId]));
+  const tokenized = questions.map((q) => ({
+    ...q,
+    promptFlagUrl: q.promptFlagUrl
+      ? `/api/flag/${signFlagToken(sessionId, answerByQid.get(q.id)!)}`
+      : q.promptFlagUrl,
+    options: q.options?.map((o) => ({
+      ...o,
+      flagUrl: o.flagUrl ? `/api/flag/${signFlagToken(sessionId, o.countryId)}` : o.flagUrl,
+    })),
+  }));
+
+  return { sessionId, questions: tokenized, settings };
 }
 
 const submitSchema = z.object({
