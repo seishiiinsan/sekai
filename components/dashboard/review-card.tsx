@@ -26,10 +26,7 @@ export function ReviewCard({ due }: { due: DueByMode }) {
   return (
     <Card className="border-primary/30 bg-primary/5">
       <CardContent className="py-5">
-        <Link
-          href={`/play/${due.topMode}?direction=direct&length=10&micro=false`}
-          className="group flex items-center gap-3"
-        >
+        <Link href="/play/review" className="group flex items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
             <History className="size-4.5" aria-hidden />
           </span>

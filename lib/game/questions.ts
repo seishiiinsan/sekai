@@ -29,6 +29,9 @@ interface PoolCountry {
 export interface AnswerKeyEntry {
   qid: number;
   countryId: number;
+  /** Per-question mode/direction so a single series can mix both (review). */
+  mode: GameMode;
+  direction: Direction;
   difficulty: number;
   /** Normalised strings accepted for a free-text answer. */
   accepted: string[];
@@ -222,12 +225,76 @@ export async function generateSeries(
     answerKey.push({
       qid,
       countryId: answer.id,
+      mode,
+      direction,
       difficulty: answer.difficulty,
       accepted: acceptedAnswers(mode, direction, answer),
       answered: false,
       correct: false,
     });
   });
+
+  return { questions, answerKey };
+}
+
+const REVIEW_SELECT =
+  "id,name_fr,capital,region,flag_svg_url,flag_alt,difficulty,aliases";
+
+/**
+ * Build the "Révision du jour" (spec §7.6): SRS-due items only, across BOTH
+ * modes, soonest-due first — no fresh fill. Each item keeps its own mode and
+ * gets a random direction for variety. Returns an empty series when nothing is
+ * due. Micro-states are included (whatever the player has already seen).
+ */
+export async function generateReviewSeries(
+  admin: Admin,
+  userId: string,
+  maxLen = 20,
+): Promise<GeneratedSeries> {
+  const { data: dueRows } = await admin
+    .from("mastery_items")
+    .select("country_id,mode")
+    .eq("user_id", userId)
+    .lte("due_at", new Date().toISOString())
+    .order("due_at", { ascending: true })
+    .limit(maxLen);
+
+  const due = dueRows ?? [];
+  if (due.length === 0) return { questions: [], answerKey: [] };
+
+  const [flagsRes, capitalsRes] = await Promise.all([
+    admin.from("countries").select(REVIEW_SELECT).lte("difficulty", 2),
+    admin.from("countries").select(REVIEW_SELECT).lte("difficulty", 2).eq("has_capital", true),
+  ]);
+  const flagsPool = (flagsRes.data ?? []) as PoolCountry[];
+  const capitalsPool = (capitalsRes.data ?? []) as PoolCountry[];
+  const flagsById = new Map(flagsPool.map((c) => [c.id, c]));
+  const capitalsById = new Map(capitalsPool.map((c) => [c.id, c]));
+
+  const questions: ClientQuestion[] = [];
+  const answerKey: AnswerKeyEntry[] = [];
+  let qid = 0;
+  for (const row of due) {
+    const mode = row.mode as GameMode;
+    const pool = mode === "flags" ? flagsPool : capitalsPool;
+    const answer = (mode === "flags" ? flagsById : capitalsById).get(row.country_id);
+    // Skip items whose country is no longer eligible (e.g. capital removed).
+    if (!answer || pool.length < 4) continue;
+
+    const direction: Direction = Math.random() < 0.5 ? "direct" : "inverse";
+    qid += 1;
+    questions.push(toClientQuestion(qid, mode, direction, answer, pool));
+    answerKey.push({
+      qid,
+      countryId: answer.id,
+      mode,
+      direction,
+      difficulty: answer.difficulty,
+      accepted: acceptedAnswers(mode, direction, answer),
+      answered: false,
+      correct: false,
+    });
+  }
 
   return { questions, answerKey };
 }
