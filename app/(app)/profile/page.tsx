@@ -4,10 +4,12 @@ import { LogOut } from "lucide-react";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { getMasteryStats } from "@/lib/data/profile-stats";
 import { getDashboardData } from "@/lib/data/dashboard";
+import { getBadgeViews } from "@/lib/data/badges";
 import { signOutAction } from "@/app/(auth)/actions";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { StatGrid } from "@/components/profile/stat-grid";
 import { MasteryByMode } from "@/components/profile/mastery-by-mode";
+import { BadgesGrid } from "@/components/profile/badges-grid";
 import { StreakHeatmap } from "@/components/dashboard/streak-heatmap";
 import { Button } from "@/components/ui/button";
 
@@ -17,9 +19,10 @@ export default async function ProfilePage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
 
-  const [mastery, dashboard] = await Promise.all([
+  const [mastery, dashboard, badges] = await Promise.all([
     getMasteryStats(),
     getDashboardData(profile.id),
+    getBadgeViews(profile.id),
   ]);
 
   return (
@@ -52,6 +55,8 @@ export default async function ProfilePage() {
       />
 
       <MasteryByMode byMode={mastery.byMode} />
+
+      <BadgesGrid items={badges.items} earnedCount={badges.earnedCount} />
 
       <StreakHeatmap activity={dashboard.activity} />
     </div>
