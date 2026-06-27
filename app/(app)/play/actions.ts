@@ -98,7 +98,7 @@ export async function submitAnswer(raw: SubmitAnswerInput): Promise<AnswerResult
 
   const { data: session } = await admin
     .from("game_sessions")
-    .select("id,user_id,mode,direction,answer_key,combo,xp_earned,status")
+    .select("id,user_id,answer_key,combo,xp_earned,status")
     .eq("id", input.sessionId)
     .eq("user_id", userId)
     .eq("status", "active")
@@ -128,12 +128,14 @@ export async function submitAnswer(raw: SubmitAnswerInput): Promise<AnswerResult
   });
 
   // ---- SRS update ----
+  // mode/direction come from the entry, not the session, so a mixed review
+  // series updates the right per-mode mastery row.
   const { data: masteryRow } = await admin
     .from("mastery_items")
     .select("srs_level,ease,interval_days,reps,lapses")
     .eq("user_id", userId)
     .eq("country_id", entry.countryId)
-    .eq("mode", session.mode)
+    .eq("mode", entry.mode)
     .maybeSingle();
 
   const prev: SrsState = masteryRow
@@ -151,7 +153,7 @@ export async function submitAnswer(raw: SubmitAnswerInput): Promise<AnswerResult
     {
       user_id: userId,
       country_id: entry.countryId,
-      mode: session.mode,
+      mode: entry.mode,
       srs_level: next.srsLevel,
       ease: next.ease,
       interval_days: next.intervalDays,
@@ -166,8 +168,8 @@ export async function submitAnswer(raw: SubmitAnswerInput): Promise<AnswerResult
   await admin.from("attempts").insert({
     user_id: userId,
     country_id: entry.countryId,
-    mode: session.mode,
-    direction: session.direction,
+    mode: entry.mode,
+    direction: entry.direction,
     is_correct: correct,
     response_ms: input.responseMs ?? null,
     xp_earned: xpEarned,

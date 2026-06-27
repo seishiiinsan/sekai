@@ -29,6 +29,9 @@ interface PoolCountry {
 export interface AnswerKeyEntry {
   qid: number;
   countryId: number;
+  /** Per-question mode/direction so a single series can mix both (review). */
+  mode: GameMode;
+  direction: Direction;
   difficulty: number;
   /** Normalised strings accepted for a free-text answer. */
   accepted: string[];
@@ -222,6 +225,8 @@ export async function generateSeries(
     answerKey.push({
       qid,
       countryId: answer.id,
+      mode,
+      direction,
       difficulty: answer.difficulty,
       accepted: acceptedAnswers(mode, direction, answer),
       answered: false,
