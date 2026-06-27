@@ -26,14 +26,16 @@ export function QuestionPrompt({ question }: { question: ClientQuestion }) {
 
       {showFlag ? (
         <span className="relative block aspect-[3/2] w-56 overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-border sm:w-64">
-          <Image
-            src={question.promptFlagUrl!}
-            alt={question.promptCountryName ?? "Drapeau à identifier"}
-            fill
-            sizes="256px"
-            priority
-            className="object-contain"
-          />
+          <span className="absolute inset-2">
+            <Image
+              src={question.promptFlagUrl!}
+              alt={question.promptCountryName ?? "Drapeau à identifier"}
+              fill
+              sizes="256px"
+              priority
+              className="object-contain"
+            />
+          </span>
         </span>
       ) : (
         <p className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">

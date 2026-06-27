@@ -56,13 +56,15 @@ export function ChoiceGrid({
             {isFlagChoice ? (
               <span className="relative block aspect-[3/2] w-full overflow-hidden rounded-md bg-muted ring-1 ring-border">
                 {opt.flagUrl && (
-                  <Image
-                    src={opt.flagUrl}
-                    alt=""
-                    fill
-                    sizes="(max-width: 640px) 45vw, 220px"
-                    className="object-contain"
-                  />
+                  <span className="absolute inset-1.5">
+                    <Image
+                      src={opt.flagUrl}
+                      alt=""
+                      fill
+                      sizes="(max-width: 640px) 45vw, 220px"
+                      className="object-contain"
+                    />
+                  </span>
                 )}
               </span>
             ) : (
