@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { verifyFlagToken } from "@/lib/game/flag-token";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAllCountries } from "@/lib/data/countries-cache";
 
 /**
  * Flag proxy (spec §11 anti-cheat). Serves a country's flag behind an opaque,
@@ -16,14 +16,8 @@ export async function GET(
   const decoded = verifyFlagToken(token);
   if (!decoded) return new Response("Not found", { status: 404 });
 
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("countries")
-    .select("flag_svg_url")
-    .eq("id", decoded.countryId)
-    .single();
-
-  const url = data?.flag_svg_url;
+  const countries = await getAllCountries();
+  const url = countries.find((c) => c.id === decoded.countryId)?.flag_svg_url;
   if (!url) return new Response("Not found", { status: 404 });
 
   const upstream = await fetch(url, { cache: "force-cache" });

@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { normalize } from "@/lib/text";
+import { getAllCountries } from "@/lib/data/countries-cache";
 import type {
   ClientQuestion,
   Direction,
@@ -23,6 +24,7 @@ interface PoolCountry {
   flag_alt: string | null;
   difficulty: number;
   aliases: string[];
+  has_capital: boolean;
 }
 
 /** One entry of the server-held answer key (never sent to the client). */
@@ -169,32 +171,31 @@ export async function generateSeries(
 ): Promise<GeneratedSeries> {
   const { mode, direction, region, includeMicroStates, length } = settings;
 
-  // Eligible pool.
-  let query = admin
-    .from("countries")
-    .select("id,name_fr,capital,region,flag_svg_url,flag_alt,difficulty,aliases")
-    .lte("difficulty", includeMicroStates ? 2 : 1);
-  if (region) query = query.eq("region", region as Region);
-  if (needsCapital(mode)) query = query.eq("has_capital", true);
+  // Fetch cached country pool and SRS-due items in parallel.
+  const [allCountries, { data: dueRows }] = await Promise.all([
+    getAllCountries(),
+    admin
+      .from("mastery_items")
+      .select("country_id")
+      .eq("user_id", userId)
+      .eq("mode", mode)
+      .lte("due_at", new Date().toISOString())
+      .order("due_at", { ascending: true })
+      .limit(length),
+  ]);
 
-  const { data: poolRaw, error } = await query;
-  if (error) throw new Error(`Country pool query failed: ${error.message}`);
-  const pool = (poolRaw ?? []) as PoolCountry[];
+  // Filter pool in JS from cached data.
+  let pool = (allCountries as PoolCountry[]).filter(
+    (c) => c.difficulty <= (includeMicroStates ? 2 : 1),
+  );
+  if (region) pool = pool.filter((c) => c.region === (region as Region));
+  if (needsCapital(mode)) pool = pool.filter((c) => c.has_capital);
+
   if (pool.length < 4) {
     throw new Error("Pas assez de pays pour générer une série avec ces réglages.");
   }
 
   const poolById = new Map(pool.map((c) => [c.id, c]));
-
-  // SRS-due items first.
-  const { data: dueRows } = await admin
-    .from("mastery_items")
-    .select("country_id")
-    .eq("user_id", userId)
-    .eq("mode", mode)
-    .lte("due_at", new Date().toISOString())
-    .order("due_at", { ascending: true })
-    .limit(length);
 
   const chosen: PoolCountry[] = [];
   const used = new Set<number>();
@@ -237,9 +238,6 @@ export async function generateSeries(
   return { questions, answerKey };
 }
 
-const REVIEW_SELECT =
-  "id,name_fr,capital,region,flag_svg_url,flag_alt,difficulty,aliases";
-
 /**
  * Build the "Révision du jour" (spec §7.6): SRS-due items only, across BOTH
  * modes, soonest-due first — no fresh fill. Each item keeps its own mode and
@@ -251,23 +249,23 @@ export async function generateReviewSeries(
   userId: string,
   maxLen = 20,
 ): Promise<GeneratedSeries> {
-  const { data: dueRows } = await admin
-    .from("mastery_items")
-    .select("country_id,mode")
-    .eq("user_id", userId)
-    .lte("due_at", new Date().toISOString())
-    .order("due_at", { ascending: true })
-    .limit(maxLen);
+  // Fetch SRS-due items and cached country pool in parallel.
+  const [{ data: dueRows }, allCountries] = await Promise.all([
+    admin
+      .from("mastery_items")
+      .select("country_id,mode")
+      .eq("user_id", userId)
+      .lte("due_at", new Date().toISOString())
+      .order("due_at", { ascending: true })
+      .limit(maxLen),
+    getAllCountries(),
+  ]);
 
   const due = dueRows ?? [];
   if (due.length === 0) return { questions: [], answerKey: [] };
 
-  const [flagsRes, capitalsRes] = await Promise.all([
-    admin.from("countries").select(REVIEW_SELECT).lte("difficulty", 2),
-    admin.from("countries").select(REVIEW_SELECT).lte("difficulty", 2).eq("has_capital", true),
-  ]);
-  const flagsPool = (flagsRes.data ?? []) as PoolCountry[];
-  const capitalsPool = (capitalsRes.data ?? []) as PoolCountry[];
+  const flagsPool = allCountries as PoolCountry[];
+  const capitalsPool = flagsPool.filter((c) => c.has_capital);
   const flagsById = new Map(flagsPool.map((c) => [c.id, c]));
   const capitalsById = new Map(capitalsPool.map((c) => [c.id, c]));
 
