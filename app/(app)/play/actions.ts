@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateSeries, generateReviewSeries, type AnswerKeyEntry } from "@/lib/game/questions";
 import { signFlagToken } from "@/lib/game/flag-token";
-import { reviewItem, NEW_SRS_STATE, type SrsState } from "@/lib/game/srs";
+import { reviewItem, NEW_SRS_STATE, MASTERED_BOX, type SrsState } from "@/lib/game/srs";
+import { evaluateBadges, BADGE_BY_KEY, type BadgeDef } from "@/lib/game/badges";
 import { xpForAnswer, levelForXp } from "@/lib/game/xp";
 import { validateChoice, validateFreeInput } from "@/lib/game/validation";
 import { GAME_MODES, DIRECTIONS } from "@/lib/game/types";
@@ -267,6 +268,67 @@ export async function submitAnswer(raw: SubmitAnswerInput): Promise<AnswerResult
   };
 }
 
+/**
+ * Recompute badge state after a finished series and persist newly-earned ones.
+ * Returns only the badges unlocked by this finish (for the result toast).
+ */
+async function awardBadges(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  profile: Tables<"profiles">,
+  perfectThisSeries: boolean,
+): Promise<BadgeDef[]> {
+  const [coreRes, masteredRes, seriesCountRes, existingRes] = await Promise.all([
+    admin.from("countries").select("id,has_capital").lte("difficulty", 1),
+    admin
+      .from("mastery_items")
+      .select("country_id,mode")
+      .eq("user_id", userId)
+      .gte("srs_level", MASTERED_BOX),
+    admin
+      .from("game_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("status", "finished"),
+    admin.from("user_badges").select("badge_key").eq("user_id", userId),
+  ]);
+
+  const coreFlagIds = new Set<number>();
+  const coreCapitalIds = new Set<number>();
+  for (const c of coreRes.data ?? []) {
+    coreFlagIds.add(c.id);
+    if (c.has_capital) coreCapitalIds.add(c.id);
+  }
+
+  let flagsMastered = 0;
+  let capitalsMastered = 0;
+  for (const m of masteredRes.data ?? []) {
+    if (m.mode === "flags" && coreFlagIds.has(m.country_id)) flagsMastered++;
+    else if (m.mode === "capitals" && coreCapitalIds.has(m.country_id)) capitalsMastered++;
+  }
+
+  const candidates = evaluateBadges({
+    level: profile.level,
+    currentStreak: profile.current_streak,
+    longestStreak: profile.longest_streak,
+    flagsMastered,
+    capitalsMastered,
+    coreFlags: coreFlagIds.size,
+    coreCapitals: coreCapitalIds.size,
+    perfectThisSeries,
+    seriesCount: seriesCountRes.count ?? 0,
+  });
+
+  const existing = new Set((existingRes.data ?? []).map((b) => b.badge_key));
+  const newKeys = candidates.filter((k) => !existing.has(k));
+  if (newKeys.length > 0) {
+    await admin
+      .from("user_badges")
+      .insert(newKeys.map((badge_key) => ({ user_id: userId, badge_key })));
+  }
+  return newKeys.map((k) => BADGE_BY_KEY[k]).filter(Boolean);
+}
+
 const finishSchema = z.object({ sessionId: z.string().uuid() });
 
 /** Close a series: credit XP, advance streak/level, return the summary. */
@@ -292,6 +354,7 @@ export async function finishSeries(raw: { sessionId: string }): Promise<SeriesSu
   let level = 1;
   let currentStreak = 0;
   let leveledUp = false;
+  let newBadges: BadgeDef[] = [];
 
   if (session.status === "active") {
     await admin
@@ -309,6 +372,8 @@ export async function finishSeries(raw: { sessionId: string }): Promise<SeriesSu
     currentStreak = profile.current_streak;
     const oldLevel = levelForXp(profile.total_xp - xpEarned);
     leveledUp = level > oldLevel;
+
+    newBadges = await awardBadges(admin, userId, profile, total >= 10 && correct === total);
   } else {
     // Already finished — return a consistent summary without double-crediting.
     const { data: profile } = await admin
@@ -334,5 +399,5 @@ export async function finishSeries(raw: { sessionId: string }): Promise<SeriesSu
     correct: e.correct,
   }));
 
-  return { xpEarned, correct, total, level, leveledUp, currentStreak, reviewItems };
+  return { xpEarned, correct, total, level, leveledUp, currentStreak, reviewItems, newBadges };
 }
