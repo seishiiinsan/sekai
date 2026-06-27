@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { generateSeries, type AnswerKeyEntry } from "@/lib/game/questions";
+import { generateSeries, generateReviewSeries, type AnswerKeyEntry } from "@/lib/game/questions";
 import { signFlagToken } from "@/lib/game/flag-token";
 import { reviewItem, NEW_SRS_STATE, type SrsState } from "@/lib/game/srs";
 import { xpForAnswer, levelForXp } from "@/lib/game/xp";
@@ -37,6 +37,29 @@ async function requireUserId(): Promise<string> {
   return user.id;
 }
 
+/**
+ * Rewrite flag URLs to opaque, session-scoped proxy tokens so the ISO code (and
+ * thus the answer) never reaches the client (spec §11). The prompt flag belongs
+ * to the question's answer; option flags belong to each option.
+ */
+function tokenizeFlags(
+  sessionId: string,
+  questions: StartedSeries["questions"],
+  answerKey: AnswerKeyEntry[],
+): StartedSeries["questions"] {
+  const answerByQid = new Map(answerKey.map((e) => [String(e.qid), e.countryId]));
+  return questions.map((q) => ({
+    ...q,
+    promptFlagUrl: q.promptFlagUrl
+      ? `/api/flag/${signFlagToken(sessionId, answerByQid.get(q.id)!)}`
+      : q.promptFlagUrl,
+    options: q.options?.map((o) => ({
+      ...o,
+      flagUrl: o.flagUrl ? `/api/flag/${signFlagToken(sessionId, o.countryId)}` : o.flagUrl,
+    })),
+  }));
+}
+
 /** Start a series: generate questions, persist the answer key server-side. */
 export async function startSeries(raw: unknown): Promise<StartedSeries> {
   const settings = settingsSchema.parse(raw) as SeriesSettings;
@@ -60,23 +83,59 @@ export async function startSeries(raw: unknown): Promise<StartedSeries> {
     throw new Error("Impossible de démarrer la série.");
   }
 
-  // Rewrite flag URLs to opaque, session-scoped proxy tokens so the ISO code
-  // (and thus the answer) never reaches the client (spec §11). The prompt flag
-  // belongs to the question's answer; option flags belong to each option.
-  const sessionId = data.id;
-  const answerByQid = new Map(answerKey.map((e) => [String(e.qid), e.countryId]));
-  const tokenized = questions.map((q) => ({
-    ...q,
-    promptFlagUrl: q.promptFlagUrl
-      ? `/api/flag/${signFlagToken(sessionId, answerByQid.get(q.id)!)}`
-      : q.promptFlagUrl,
-    options: q.options?.map((o) => ({
-      ...o,
-      flagUrl: o.flagUrl ? `/api/flag/${signFlagToken(sessionId, o.countryId)}` : o.flagUrl,
-    })),
-  }));
+  return {
+    sessionId: data.id,
+    questions: tokenizeFlags(data.id, questions, answerKey),
+    settings,
+  };
+}
 
-  return { sessionId, questions: tokenized, settings };
+/** Sentinel thrown by startReviewSeries when nothing is due for review. */
+export const NO_REVIEW_DUE = "NO_REVIEW_DUE";
+
+/**
+ * Start the daily-review series: SRS-due items only, both modes mixed. Throws
+ * NO_REVIEW_DUE when there is nothing to review.
+ */
+export async function startReviewSeries(): Promise<StartedSeries> {
+  const userId = await requireUserId();
+  const admin = createAdminClient();
+
+  const { questions, answerKey } = await generateReviewSeries(admin, userId, 20);
+  if (answerKey.length === 0) throw new Error(NO_REVIEW_DUE);
+
+  const primaryMode = answerKey[0].mode;
+  const primaryDirection = answerKey[0].direction;
+
+  const { data, error } = await admin
+    .from("game_sessions")
+    .insert({
+      user_id: userId,
+      // Single enum columns: store the first item's mode/direction as an
+      // indicative value. Grading uses the per-entry mode/direction.
+      mode: primaryMode,
+      direction: primaryDirection,
+      answer_key: answerKey as unknown as Json,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    throw new Error("Impossible de démarrer la révision.");
+  }
+
+  const settings: SeriesSettings = {
+    mode: primaryMode,
+    direction: primaryDirection,
+    includeMicroStates: true,
+    length: answerKey.length,
+  };
+
+  return {
+    sessionId: data.id,
+    questions: tokenizeFlags(data.id, questions, answerKey),
+    settings,
+  };
 }
 
 const submitSchema = z.object({
