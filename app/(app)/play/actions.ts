@@ -1,9 +1,11 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateSeries, generateReviewSeries, type AnswerKeyEntry } from "@/lib/game/questions";
+import { getAllCountries } from "@/lib/data/countries-cache";
 import { signFlagToken } from "@/lib/game/flag-token";
 import { reviewItem, NEW_SRS_STATE, MASTERED_BOX, type SrsState } from "@/lib/game/srs";
 import { evaluateBadges, BADGE_BY_KEY, type BadgeDef } from "@/lib/game/badges";
@@ -207,51 +209,49 @@ export async function submitAnswer(raw: SubmitAnswerInput): Promise<AnswerResult
     : NEW_SRS_STATE;
   const next = reviewItem(prev, correct);
 
-  await admin.from("mastery_items").upsert(
-    {
-      user_id: userId,
-      country_id: entry.countryId,
-      mode: entry.mode,
-      srs_level: next.srsLevel,
-      ease: next.ease,
-      interval_days: next.intervalDays,
-      reps: next.reps,
-      lapses: next.lapses,
-      due_at: next.dueAt.toISOString(),
-      last_reviewed_at: next.lastReviewedAt.toISOString(),
-    },
-    { onConflict: "user_id,country_id,mode" },
-  );
-
-  await admin.from("attempts").insert({
-    user_id: userId,
-    country_id: entry.countryId,
-    mode: entry.mode,
-    direction: entry.direction,
-    is_correct: correct,
-    response_ms: input.responseMs ?? null,
-    xp_earned: xpEarned,
-  });
-
   // ---- Persist session progress ----
   entry.answered = true;
   entry.correct = correct;
   const newCombo = correct ? comboBefore + 1 : 0;
-  await admin
-    .from("game_sessions")
-    .update({
-      answer_key: answerKey as unknown as Json,
-      combo: newCombo,
-      xp_earned: session.xp_earned + xpEarned,
-    })
-    .eq("id", session.id);
 
-  // ---- Reveal the correct country for feedback ----
-  const { data: country } = await admin
-    .from("countries")
-    .select("id,name_fr,capital,flag_svg_url")
-    .eq("id", entry.countryId)
-    .single();
+  // Writes are independent; country lookup uses the cache — run all in parallel.
+  const [, , , allCountries] = await Promise.all([
+    admin.from("mastery_items").upsert(
+      {
+        user_id: userId,
+        country_id: entry.countryId,
+        mode: entry.mode,
+        srs_level: next.srsLevel,
+        ease: next.ease,
+        interval_days: next.intervalDays,
+        reps: next.reps,
+        lapses: next.lapses,
+        due_at: next.dueAt.toISOString(),
+        last_reviewed_at: next.lastReviewedAt.toISOString(),
+      },
+      { onConflict: "user_id,country_id,mode" },
+    ),
+    admin.from("attempts").insert({
+      user_id: userId,
+      country_id: entry.countryId,
+      mode: entry.mode,
+      direction: entry.direction,
+      is_correct: correct,
+      response_ms: input.responseMs ?? null,
+      xp_earned: xpEarned,
+    }),
+    admin
+      .from("game_sessions")
+      .update({
+        answer_key: answerKey as unknown as Json,
+        combo: newCombo,
+        xp_earned: session.xp_earned + xpEarned,
+      })
+      .eq("id", session.id),
+    getAllCountries(),
+  ]);
+
+  const country = allCountries.find((c) => c.id === entry.countryId);
 
   return {
     correct,
@@ -396,6 +396,10 @@ export async function finishSeries(raw: { sessionId: string }): Promise<SeriesSu
     name: nameById.get(e.countryId) ?? "",
     correct: e.correct,
   }));
+
+  revalidatePath("/dashboard");
+  revalidatePath("/profile");
+  revalidatePath("/leaderboard");
 
   return { xpEarned, correct, total, level, leveledUp, currentStreak, reviewItems, newBadges };
 }
