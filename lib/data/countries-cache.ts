@@ -5,8 +5,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export interface CachedCountry {
   id: number;
   name_fr: string;
+  name_official: string;
   capital: string[];
   region: string | null;
+  subregion: string | null;
+  area: number | null;
+  cca2: string;
+  cca3: string;
   flag_svg_url: string | null;
   flag_alt: string | null;
   difficulty: number;
@@ -19,7 +24,7 @@ export const getAllCountries = unstable_cache(
     const admin = createAdminClient();
     const { data } = await admin
       .from("countries")
-      .select("id,name_fr,capital,region,flag_svg_url,flag_alt,difficulty,aliases,has_capital");
+      .select("id,name_fr,name_official,capital,region,subregion,area,cca2,cca3,flag_svg_url,flag_alt,difficulty,aliases,has_capital");
     return (data ?? []) as CachedCountry[];
   },
   ["countries-all"],

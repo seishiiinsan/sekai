@@ -19,6 +19,15 @@ const STATUS_DOT: Record<MasteryStatus, string> = {
   mastered: "bg-primary",
 };
 
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="shrink-0 text-sm text-muted-foreground">{label}</span>
+      <span className="text-right text-sm font-medium">{value}</span>
+    </div>
+  );
+}
+
 function MasteryRow({ label, status }: { label: string; status: MasteryStatus }) {
   return (
     <div className="flex items-center justify-between">
@@ -29,6 +38,10 @@ function MasteryRow({ label, status }: { label: string; status: MasteryStatus })
       </span>
     </div>
   );
+}
+
+function formatArea(km2: number): string {
+  return km2.toLocaleString("fr-FR") + " km²";
 }
 
 export function CountryModal({
@@ -44,32 +57,42 @@ export function CountryModal({
     <Dialog.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/50 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
-        <Dialog.Popup className="fixed inset-x-4 top-1/2 z-50 mx-auto max-w-sm -translate-y-1/2 overflow-hidden rounded-2xl border bg-card shadow-xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
+        <Dialog.Popup className="fixed inset-x-4 top-1/2 z-50 mx-auto max-h-[90vh] max-w-sm -translate-y-1/2 overflow-y-auto overflow-x-hidden rounded-2xl border bg-card shadow-xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
           {country && (
             <>
               {/* Drapeau */}
               <div className="relative aspect-[3/2] w-full bg-muted">
-                {country.flag_svg_url && (
-                  <Image
-                    src={country.flag_svg_url}
-                    alt={country.flag_alt ?? `Drapeau ${country.name_fr}`}
-                    fill
-                    sizes="448px"
-                    className="object-contain"
-                  />
-                )}
+                <span className="absolute inset-3">
+                  {country.flag_svg_url && (
+                    <Image
+                      src={country.flag_svg_url}
+                      alt={country.flag_alt ?? `Drapeau ${country.name_fr}`}
+                      fill
+                      sizes="448px"
+                      className="object-contain"
+                    />
+                  )}
+                </span>
               </div>
 
               {/* Contenu */}
               <div className="p-5">
+                {/* En-tête */}
                 <div className="flex items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <Dialog.Title className="text-xl font-semibold leading-tight">
                       {country.name_fr}
                     </Dialog.Title>
+                    {country.name_official !== country.name_fr && (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground italic">
+                        {country.name_official}
+                      </p>
+                    )}
                     {country.region && (
-                      <p className="mt-0.5 text-sm text-muted-foreground">
-                        {REGION_LABELS[country.region as keyof typeof REGION_LABELS] ?? country.region}
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {country.subregion
+                          ? `${country.subregion} · ${REGION_LABELS[country.region as keyof typeof REGION_LABELS] ?? country.region}`
+                          : (REGION_LABELS[country.region as keyof typeof REGION_LABELS] ?? country.region)}
                       </p>
                     )}
                   </div>
@@ -81,17 +104,29 @@ export function CountryModal({
                   </Dialog.Close>
                 </div>
 
-                {/* Capitale(s) */}
-                {country.capital.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      {country.capital.length > 1 ? "Capitales" : "Capitale"}
-                    </p>
-                    <p className="mt-1 text-sm font-medium">
-                      {country.capital.join(", ")}
-                    </p>
-                  </div>
-                )}
+                {/* Infos géographiques */}
+                <div className="mt-4 space-y-2 rounded-lg bg-muted/40 p-3">
+                  {country.capital.length > 0 && (
+                    <InfoRow
+                      label={country.capital.length > 1 ? "Capitales" : "Capitale"}
+                      value={country.capital.join(", ")}
+                    />
+                  )}
+                  {country.area != null && country.area > 0 && (
+                    <InfoRow label="Superficie" value={formatArea(country.area)} />
+                  )}
+                  <InfoRow
+                    label="Codes ISO"
+                    value={
+                      <span className="font-mono text-xs">
+                        {country.cca2} · {country.cca3}
+                      </span>
+                    }
+                  />
+                  {country.difficulty === 2 && (
+                    <InfoRow label="Statut" value="Micro-État" />
+                  )}
+                </div>
 
                 {/* Maîtrise */}
                 <div className="mt-4 space-y-2">
@@ -103,11 +138,6 @@ export function CountryModal({
                     <MasteryRow label="Capitales" status={country.mastery.capitals} />
                   )}
                 </div>
-
-                {/* Difficulté */}
-                {country.difficulty === 2 && (
-                  <p className="mt-3 text-xs text-muted-foreground">Micro-État</p>
-                )}
               </div>
             </>
           )}
