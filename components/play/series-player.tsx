@@ -81,6 +81,9 @@ export function SeriesPlayer({
       const s = await finishSeries({ sessionId: initial.sessionId });
       setSummary(s);
       setPhase("finished");
+      for (const badge of s.newBadges) {
+        toast.success(`🏅 Badge débloqué : ${badge.label}`, { description: badge.description });
+      }
     } catch {
       toast.error("Impossible de terminer la série. Réessaie.");
     } finally {

@@ -3,6 +3,7 @@
  * Kept framework-agnostic so they can be imported by server actions,
  * pure logic in lib/game/*, and client components alike.
  */
+import type { BadgeDef } from "./badges";
 
 export type GameMode = "flags" | "capitals";
 export type Direction = "direct" | "inverse";
@@ -130,6 +131,8 @@ export interface SeriesSummary {
   leveledUp: boolean;
   currentStreak: number;
   reviewItems: ReviewItem[];
+  /** Badges unlocked by finishing this series (empty on a re-finish). */
+  newBadges: BadgeDef[];
 }
 
 export interface StartedSeries {
