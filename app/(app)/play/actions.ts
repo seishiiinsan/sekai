@@ -91,19 +91,17 @@ export async function startSeries(raw: unknown): Promise<StartedSeries> {
   };
 }
 
-/** Sentinel thrown by startReviewSeries when nothing is due for review. */
-export const NO_REVIEW_DUE = "NO_REVIEW_DUE";
-
 /**
  * Start the daily-review series: SRS-due items only, both modes mixed. Throws
- * NO_REVIEW_DUE when there is nothing to review.
+ * when there is nothing to review (the page catches it and shows an empty state).
+ * NB: a "use server" module may only export async functions, so no sentinel const.
  */
 export async function startReviewSeries(): Promise<StartedSeries> {
   const userId = await requireUserId();
   const admin = createAdminClient();
 
   const { questions, answerKey } = await generateReviewSeries(admin, userId, 20);
-  if (answerKey.length === 0) throw new Error(NO_REVIEW_DUE);
+  if (answerKey.length === 0) throw new Error("NO_REVIEW_DUE");
 
   const primaryMode = answerKey[0].mode;
   const primaryDirection = answerKey[0].direction;
