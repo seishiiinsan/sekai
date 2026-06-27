@@ -17,7 +17,7 @@ export function HeroFlags() {
           key={code}
           // Visible by default; the float is purely decorative so the hero never
           // depends on an animation frame to be readable.
-          className="relative block aspect-[3/2] overflow-hidden rounded-md shadow-sm ring-1 ring-border"
+          className="relative block aspect-[3/2] overflow-hidden rounded-md bg-muted shadow-sm ring-1 ring-border"
           animate={reduce ? undefined : { y: [0, -5, 0] }}
           transition={
             reduce
@@ -35,7 +35,7 @@ export function HeroFlags() {
             alt=""
             fill
             sizes="120px"
-            className="object-cover"
+            className="object-contain"
           />
         </motion.span>
       ))}

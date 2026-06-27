@@ -43,7 +43,7 @@ export function AnswerFeedback({
                 alt=""
                 width={20}
                 height={14}
-                className="mr-1.5 inline-block rounded-[2px] align-[-2px] ring-1 ring-border"
+                className="mr-1.5 inline-block rounded-[2px] align-[-2px] object-contain ring-1 ring-border"
               />
             )}
             <span className="font-medium text-foreground">{answer.name}</span>
